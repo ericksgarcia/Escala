@@ -1,337 +1,433 @@
 # -*- coding: utf-8 -*-
 """
-Gera a planilha de controle de escala para um Centro de Operacoes 24h.
+Motor de escala 24h - Centro de Operacoes.
+Gera projecao de 2 anos (730 dias) dia-a-dia, nomes ficticios,
+multiplas visoes e funcao de substituicao ranqueada (sem macros).
 Saida: Escala_Centro_Operacoes.xlsx
 """
-import openpyxl
+import openpyxl, random
+from datetime import date, timedelta
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
-from datetime import date
+from openpyxl.formatting.rule import FormulaRule, CellIsRule
 
-# ----------------------------------------------------------------------------
-# ESTILOS
-# ----------------------------------------------------------------------------
-VERDE_TIT   = PatternFill("solid", fgColor="375623")  # cabecalho escuro
-VERDE_MED   = PatternFill("solid", fgColor="70AD47")
-VERDE_CLR   = PatternFill("solid", fgColor="C6E0B4")
-VERDE_SUAVE = PatternFill("solid", fgColor="E2EFDA")
-LARANJA     = PatternFill("solid", fgColor="F8CBAD")
-AZUL_CLR    = PatternFill("solid", fgColor="DDEBF7")
-CINZA       = PatternFill("solid", fgColor="D9D9D9")
-AMARELO     = PatternFill("solid", fgColor="FFF2CC")
-VERMELHO    = PatternFill("solid", fgColor="F4CCCC")
+random.seed(42)
 
-BRANCO_BOLD = Font(bold=True, color="FFFFFF")
-BOLD        = Font(bold=True)
-TITULO      = Font(bold=True, size=14, color="FFFFFF")
+# ---------------------------------------------------------------- estilos
+VTIT = PatternFill("solid", fgColor="375623")
+VMED = PatternFill("solid", fgColor="70AD47")
+VCLR = PatternFill("solid", fgColor="C6E0B4")
+VSUA = PatternFill("solid", fgColor="E2EFDA")
+AZUL = PatternFill("solid", fgColor="DDEBF7")
+CINZA= PatternFill("solid", fgColor="D9D9D9")
+AMAR = PatternFill("solid", fgColor="FFF2CC")
+VERM = PatternFill("solid", fgColor="F4CCCC")
+LARJ = PatternFill("solid", fgColor="FCE4D6")
+WB_  = Font(bold=True, color="FFFFFF")
+B_   = Font(bold=True)
+T_   = Font(bold=True, size=14, color="FFFFFF")
+THIN = Side(style="thin", color="BFBFBF")
+BORDA= Border(left=THIN,right=THIN,top=THIN,bottom=THIN)
+CEN  = Alignment(horizontal="center", vertical="center", wrap_text=True)
+ESQ  = Alignment(horizontal="left", vertical="center", wrap_text=True)
 
-THIN = Side(style="thin", color="A6A6A6")
-BORDA = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
-CENTER = Alignment(horizontal="center", vertical="center", wrap_text=True)
-LEFT   = Alignment(horizontal="left", vertical="center", wrap_text=True)
-
-def style_range(ws, rng, fill=None, font=None, border=BORDA, align=CENTER):
+def sr(ws, rng, fill=None, font=None, border=BORDA, align=CEN):
     for row in ws[rng]:
         for c in row:
-            if fill:   c.fill = fill
-            if font:   c.font = font
-            if border: c.border = border
-            if align:  c.alignment = align
+            if fill: c.fill=fill
+            if font: c.font=font
+            if border: c.border=border
+            if align: c.alignment=align
 
-wb = openpyxl.Workbook()
+# ---------------------------------------------------------------- nomes ficticios
+PRI = ["Alexandre","Bruna","Caio","Daniela","Eduardo","Fernanda","Gustavo","Helena",
+"Igor","Juliana","Kleber","Larissa","Marcos","Natalia","Otavio","Patricia","Rafael",
+"Sabrina","Thiago","Vanessa","Wagner","Yasmin","Bernardo","Camila","Diego","Elaine",
+"Fabio","Gabriela","Henrique","Isabela","Joao","Karina","Lucas","Mariana","Nelson",
+"Olivia","Paulo","Renata","Sergio","Tatiana","Ulisses","Viviane","Wesley","Adriana",
+"Breno","Cintia","Davi","Erika","Felipe","Giovana","Hugo","Ines","Jonas","Keila",
+"Leandro","Monica","Nicolas","Priscila","Ramon","Silvia","Tarcisio","Ursula","Vitor",
+"Wanda","Anderson","Beatriz","Cesar","Debora","Emerson","Flavia","Gilberto","Heloisa",
+"Ivan","Jaqueline","Kaua","Luana","Mateus","Nadia","Osmar","Poliana","Rodrigo","Simone",
+"Tomas"," Udo","Valeria","Wilson","Amanda","Bruno","Carla","Denis","Edna","Fabricio",
+"Gisele","Hamilton","Iara","Jefferson","Lia","Murilo","Noemia"]
+SOB = ["Silva","Souza","Oliveira","Pereira","Costa","Almeida","Nunes","Carvalho","Rocha",
+"Gomes","Martins","Araujo","Ribeiro","Barbosa","Teixeira","Cardoso","Moraes","Lima",
+"Freitas","Pinto","Moreira","Cavalcanti","Dias","Castro","Campos","Macedo","Andrade",
+"Vieira","Mendes","Tavares","Correia","Ramos","Azevedo","Batista","Fonseca","Cunha",
+"Brandao","Siqueira","Pacheco","Reis"]
+def nomes(n):
+    out=set(); res=[]
+    i=0
+    while len(res)<n:
+        nm=f"{PRI[i%len(PRI)]} {SOB[(i*3)%len(SOB)]}"
+        if nm not in out: out.add(nm); res.append(nm)
+        i+=1
+    return res
+NOMES = nomes(98)
 
-# ============================================================================
-# ABA 1 - DIMENSIONAMENTO (resposta as perguntas)
-# ============================================================================
-ws = wb.active
-ws.title = "Dimensionamento"
-ws.sheet_view.showGridLines = False
-widths = {"A":3,"B":46,"C":16,"D":16,"E":16,"F":16,"G":40}
-for k,v in widths.items(): ws.column_dimensions[k].width = v
+# ---------------------------------------------------------------- postos
+P_DIURNO = ["BH/NL","SG/AR","BT","SL","GV","RA/PO","TO/PR","IP/AG","DV/IJ","FM/CL",
+"IA/CR","MO/SI","PT/AL","JN/BC","JB/PI","JF/OP","PN/LV","LF/BD","UL/IR","PM/PS","TB/AF",
+"UR/JM","PA/SJ","TC/FR","VR/AX","CN/MG"]                              # 26
+MALHA = {p:m for p,m in zip(P_DIURNO,
+ ["CENTRO"]*4+["LESTE"]*4+["OESTE"]*3+["NORTE"]*4+["MANTIQUEIRA"]*3+["TRIANGULO"]*4+["SUL"]*3+["CENTRO"])}
+P_NOITE  = ["N1","N2","N3","N4","N5"]
+P_APOIO  = ["AP-1","AP-2"]
 
-ws.merge_cells("B2:G2")
-ws["B2"] = "DIMENSIONAMENTO DA EQUIPE - CENTRO DE OPERACOES 24h"
-ws["B2"].fill = VERDE_TIT; ws["B2"].font = TITULO; ws["B2"].alignment = CENTER
-ws.row_dimensions[2].height = 28
+SHIFTS = {  # shift: (lista_postos, qtd_titular, qtd_volante, label_turno)
+ "D": (P_DIURNO, 26, 17, "07:00-15:30"),
+ "T": (P_DIURNO, 26, 17, "15:00-23:30"),
+ "N": (P_NOITE,   5,  4, "23:00-07:30"),
+ "A": (P_APOIO,   2,  1, "Apoio seg-sex"),
+}
 
-r = 4
-ws[f"B{r}"] = "1) PREMISSAS DA OPERACAO"; ws[f"B{r}"].font = BOLD; ws[f"B{r}"].fill = VERDE_CLR
-ws.merge_cells(f"B{r}:G{r}")
-r += 1
-premissas = [
-    ("Postos diurnos (07:00-15:30) - 7 dias/sem", 26),
-    ("Postos tarde (15:00-23:30) - 7 dias/sem", 26),
-    ("Postos noturnos (23:00-07:30) - 7 dias/sem (agrupados)", 5),
-    ("Postos de apoio (seg a sex, diurno)", 2),
-    ("Dias de ferias por ano (por funcionario)", 30),
-    ("Regime de trabalho", "6x3"),
-    ("Limite de hora extra por mes (horas)", 52),
+# ---------------------------------------------------------------- funcionarios
+emp=[]   # dict por funcionario
+idx=0
+for sh,(postos,nt,nv,lab) in SHIFTS.items():
+    for k in range(nt+nv):
+        titular = k < nt
+        emp.append({
+            "id": idx+1, "nome": NOMES[idx], "shift": sh, "turno": lab,
+            "tipo": "Titular" if titular else "Volante",
+            "posto": postos[k] if titular else "",
+            "offset": k % 9,
+        })
+        idx+=1
+N = len(emp)  # 98
+
+# ferias: 2 janelas de 30 dias em 730 dias, escalonadas
+for e in emp:
+    base = 25 + (e["id"]*9) % 300
+    e["ferias"] = set()
+    for w in (base, base+365):
+        for d in range(w, w+30):
+            if 0<=d<730: e["ferias"].add(d)
+
+# conhecimento inicial: titular ja domina seu posto
+pts={}; last={}    # pts[(eid,posto)], last[(eid,posto)] = dia
+for e in emp:
+    if e["tipo"]=="Titular":
+        pts[(e["id"],e["posto"])] = random.randint(150,400)
+        last[(e["id"],e["posto"])] = -2
+
+def eff(eid,posto,day):
+    if (eid,posto) not in pts: return 0
+    parado = day - last[(eid,posto)]
+    return max(0, pts[(eid,posto)] - max(0, parado-180))
+
+# ---------------------------------------------------------------- motor diario
+D0 = date(2026,6,4)
+status = [["" for _ in range(730)] for _ in range(N)]  # status[eid-1][dia]
+he_events=[]      # (dia, posto, eid)
+descobertos=0
+
+by_shift={sh:[e for e in emp if e["shift"]==sh] for sh in SHIFTS}
+
+for day in range(730):
+    dt = D0 + timedelta(days=day)
+    weekday = dt.weekday()  # 0=seg ... 6=dom
+    for sh,(postos,nt,nv,lab) in SHIFTS.items():
+        team = by_shift[sh]
+        postos_dia = postos if sh!="A" else (postos if weekday<5 else [])
+        # disponibilidade
+        avail=[]; folga=[]
+        for e in team:
+            eid=e["id"]
+            if day in e["ferias"]:
+                status[eid-1][day]="FERIAS"; continue
+            working = ((day - e["offset"]) % 9) < 6
+            if sh=="A" and weekday>=5:
+                status[eid-1][day]="FOLGA"; continue
+            if working: avail.append(e)
+            else: folga.append(e); status[eid-1][day]="FOLGA"
+        assigned={}            # posto -> eid
+        used=set()
+        # 1) titular no proprio posto (continuidade)
+        for e in avail:
+            if e["tipo"]=="Titular" and e["posto"] in postos_dia and e["posto"] not in assigned:
+                assigned[e["posto"]]=e["id"]; used.add(e["id"])
+        # 2) postos descobertos -> melhor candidato por conhecimento + ontem
+        livres=[p for p in postos_dia if p not in assigned]
+        pool=[e for e in avail if e["id"] not in used]
+        for p in livres:
+            if not pool: break
+            def score(e):
+                ontem = 1 if day>0 and status[e["id"]-1][day-1]==p else 0
+                return (eff(e["id"],p,day), ontem, -e["id"])
+            best=max(pool, key=score)
+            assigned[p]=best["id"]; used.add(best["id"]); pool.remove(best)
+        # 3) ainda descoberto -> hora extra (chama alguem de folga)
+        for p in postos_dia:
+            if p not in assigned:
+                cand=[e for e in folga if e["id"] not in used]
+                if cand:
+                    best=max(cand, key=lambda e:(eff(e["id"],p,day), -e["id"]))
+                    assigned[p]="HE_"+str(best["id"])
+                    he_events.append((day,p,best["id"]))
+                    used.add(best["id"])
+                else:
+                    assigned[p]="DESCOBERTO"; descobertos+=1
+        # registra status e pontua conhecimento
+        for p,who in assigned.items():
+            if isinstance(who,str) and who.startswith("HE_"):
+                eid=int(who[3:])
+                status[eid-1][day]=f"{p} (HE)"
+            elif who=="DESCOBERTO":
+                continue
+            else:
+                eid=who
+                # se nao era seu posto titular marca como cobertura
+                e=emp[eid-1]
+                status[eid-1][day]=p
+            pts[(eid,p)]=pts.get((eid,p),0)+1
+            last[(eid,p)]=day
+        # quem sobrou disponivel = reserva
+        for e in pool:
+            if not status[e["id"]-1][day]:
+                status[e["id"]-1][day]="RESERVA"
+
+# ================================================================ WORKBOOK
+wb=openpyxl.Workbook()
+
+# ---------- ABA Instrucoes
+ws=wb.active; ws.title="Instrucoes"; ws.sheet_view.showGridLines=False
+ws.column_dimensions["B"].width=110
+ws.merge_cells("B2:B2"); ws["B2"]="CONTROLE DE ESCALA - CENTRO DE OPERACOES 24h"
+ws["B2"].fill=VTIT; ws["B2"].font=T_; ws["B2"].alignment=ESQ; ws.row_dimensions[2].height=26
+linhas=[
+ "",
+ "ABAS DESTE ARQUIVO:",
+ "1. Dimensionamento  -> calculo de quantos funcionarios sao necessarios.",
+ "2. Funcionarios     -> cadastro (98) com nomes ficticios, turno e posto titular.",
+ "3. Postos           -> os 26 postos diurnos/tarde + 5 noturnos + 2 apoio.",
+ "4. Calendario 2 anos -> grade mestra: cada funcionario x cada dia (730 dias). FONTE de todas as visoes.",
+ "5. Visao Diaria     -> escolha uma DATA e veja quem esta em cada posto naquele dia.",
+ "6. Visao Funcionario-> escolha um FUNCIONARIO e veja a escala dele dia-a-dia.",
+ "7. Substituicao     -> informe DATA + POSTO + quem faltou; o sistema ranqueia os melhores substitutos.",
+ "8. Banco Conhecimento-> pontos de cada pessoa em cada posto (com decaimento apos 6 meses).",
+ "9. Horas Extras     -> controle mensal com limite de 52h/mes.",
+ "",
+ "REGRAS APLICADAS:",
+ "- Regime 6x3 (6 dias trabalha, 3 folga) em todos os postos.",
+ "- A mesma pessoa (titular) e mantida no proprio posto sempre que esta disponivel.",
+ "- Volantes cobrem folgas, ferias e faltas, priorizando MAIOR conhecimento e quem ja estava no posto no dia anterior.",
+ "- Substituicao: o ranking usa (1) quem ficou com o posto no ultimo dia e (2) os pontos de conhecimento.",
+ "- Legenda do calendario: codigo do posto = trabalhando; FOLGA; FERIAS; RESERVA; '(HE)' = hora extra.",
 ]
-hdr = r
-ws[f"B{r}"]="Parametro"; ws[f"C{r}"]="Valor"
-style_range(ws, f"B{r}:C{r}", VERDE_MED, BRANCO_BOLD)
-r += 1
-for nome, val in premissas:
-    ws[f"B{r}"]=nome; ws[f"C{r}"]=val
-    style_range(ws, f"B{r}:B{r}", VERDE_SUAVE, None, BORDA, LEFT)
-    style_range(ws, f"C{r}:C{r}", None, BOLD)
-    r += 1
+r=3
+for t in linhas:
+    ws.cell(r,2,t); ws.cell(r,2).alignment=ESQ
+    if t.endswith(":"): ws.cell(r,2).font=B_
+    r+=1
 
-r += 1
-ws[f"B{r}"] = "2) BASE DE CALCULO"; ws[f"B{r}"].font=BOLD; ws[f"B{r}"].fill=VERDE_CLR
-ws.merge_cells(f"B{r}:G{r}")
-r += 1
-notas = [
- "Regime 6x3: a cada ciclo de 9 dias o funcionario trabalha 6. Fator de cobertura continua = 9/6 = 1,5 pessoas por posto.",
- "Dias uteis trabalhados/ano por pessoa (6x3): 365 x 6/9 = 243 dias.",
- "Desconto de ferias (30 dias corridos): perde ~20 dias de trabalho/ano. Disponibilidade liquida = ~223 dias/ano.",
- "Headcount por turno = (postos x 365) / 223 dias liquidos. Apoio usa 261 dias uteis/ano.",
-]
-for n in notas:
-    ws.merge_cells(f"B{r}:G{r}")
-    ws[f"B{r}"]=n; ws[f"B{r}"].alignment=LEFT; ws[f"B{r}"].font=Font(italic=True, size=9)
-    ws.row_dimensions[r].height = 26
-    r += 1
+# ---------- ABA Dimensionamento
+wd=wb.create_sheet("Dimensionamento"); wd.sheet_view.showGridLines=False
+for c,w in zip("ABCDEFG",[3,46,12,12,14,12,30]): wd.column_dimensions[c].width=w
+wd.merge_cells("B2:G2"); wd["B2"]="DIMENSIONAMENTO DA EQUIPE"; wd["B2"].fill=VTIT; wd["B2"].font=T_; wd["B2"].alignment=CEN
+wd["B4"]="Turno"; wd["C4"]="Postos"; wd["D4"]="Dias/ano"; wd["E4"]="Pessoa-dias"; wd["F4"]="Disp./ano"; wd["G4"]="Funcionarios"
+sr(wd,"B4:G4",VMED,WB_)
+linhas=[("Diurno 07:00-15:30",26,365,223),("Tarde 15:00-23:30",26,365,223),
+        ("Noturno 23:00-07:30 (5 agrupados)",5,365,223),("Apoio seg-sex (diurno)",2,261,223)]
+r=5
+for nm,po,di,dp in linhas:
+    wd.cell(r,2,nm).alignment=ESQ; wd.cell(r,3,po); wd.cell(r,4,di)
+    wd.cell(r,5,f"=C{r}*D{r}"); wd.cell(r,6,dp); wd.cell(r,7,f"=ROUNDUP(E{r}/F{r},0)")
+    sr(wd,f"C{r}:G{r}"); wd.cell(r,2).border=BORDA; wd.cell(r,7).font=B_; r+=1
+wd.cell(r,2,"TOTAL DE FUNCIONARIOS").font=B_; wd.cell(r,7,f"=SUM(G5:G{r-1})").font=Font(bold=True,size=12)
+sr(wd,f"B{r}:G{r}",AMAR,B_); tot=r; r+=2
+wd.cell(r,2,"Titulares (posto FIXO)").alignment=ESQ; wd.cell(r,3,"=26+26+5+2"); wd.cell(r,3).font=B_
+sr(wd,f"B{r}:C{r}",VSUA); fx=r; r+=1
+wd.cell(r,2,"Volantes (posto VARIAVEL)").alignment=ESQ; wd.cell(r,3,f"=G{tot}-C{fx}"); wd.cell(r,3).font=B_
+sr(wd,f"B{r}:C{r}",AZUL); r+=2
+wd.merge_cells(f"B{r}:G{r}")
+wd.cell(r,2,"Faltas imprevistas sao cobertas por hora extra (limite 52h/mes). Ver aba Horas Extras.").alignment=ESQ
+wd.cell(r,2).font=Font(italic=True,size=9)
 
-r += 1
-ws[f"B{r}"]="3) NECESSIDADE DE PESSOAL POR TURNO"; ws[f"B{r}"].font=BOLD; ws[f"B{r}"].fill=VERDE_CLR
-ws.merge_cells(f"B{r}:G{r}")
-r += 1
-ws[f"B{r}"]="Turno"; ws[f"C{r}"]="Postos"; ws[f"D{r}"]="Dias/ano"; ws[f"E{r}"]="Pessoa-dias"; ws[f"F{r}"]="Disp./ano"; ws[f"G{r}"]="Funcionarios"
-style_range(ws, f"B{r}:G{r}", VERDE_MED, BRANCO_BOLD)
-r += 1
-linhas = [
-    ("Diurno 07:00-15:30", 26, 365, 223),
-    ("Tarde 15:00-23:30", 26, 365, 223),
-    ("Noturno 23:00-07:30 (5 agrupados)", 5, 365, 223),
-    ("Apoio seg-sex (diurno)", 2, 261, 223),
-]
-primeira = r
-for nome, postos, dias, disp in linhas:
-    ws[f"B{r}"]=nome
-    ws[f"C{r}"]=postos
-    ws[f"D{r}"]=dias
-    ws[f"E{r}"]=f"=C{r}*D{r}"
-    ws[f"F{r}"]=disp
-    ws[f"G{r}"]=f"=ROUNDUP(E{r}/F{r},0)"
-    style_range(ws, f"B{r}:B{r}", VERDE_SUAVE, None, BORDA, LEFT)
-    style_range(ws, f"C{r}:G{r}")
-    ws[f"G{r}"].font = BOLD
-    r += 1
-ult = r-1
-ws[f"B{r}"]="TOTAL DE FUNCIONARIOS (efetivo)"; ws[f"B{r}"].font=BOLD
-ws[f"G{r}"]=f"=SUM(G{primeira}:G{ult})"; ws[f"G{r}"].font=Font(bold=True,size=12)
-style_range(ws, f"B{r}:G{r}", AMARELO, BOLD)
-total_row = r
-r += 2
+# ---------- ABA Funcionarios
+wf=wb.create_sheet("Funcionarios"); wf.sheet_view.showGridLines=False
+for c,w in zip("ABCDE",[6,26,12,16,16]): wf.column_dimensions[c].width=w
+wf.merge_cells("A1:E1"); wf["A1"]="CADASTRO DE FUNCIONARIOS"; wf["A1"].fill=VTIT; wf["A1"].font=T_; wf["A1"].alignment=CEN
+for i,h in enumerate(["ID","Nome","Tipo","Turno","Posto titular"]): wf.cell(2,1+i,h)
+sr(wf,"A2:E2",VMED,WB_)
+for i,e in enumerate(emp):
+    r=3+i
+    wf.cell(r,1,e["id"]); wf.cell(r,2,e["nome"]).alignment=ESQ; wf.cell(r,3,e["tipo"])
+    wf.cell(r,4,e["turno"]); wf.cell(r,5,e["posto"])
+    sr(wf,f"A{r}:E{r}", VSUA if e["tipo"]=="Titular" else AZUL)
+    wf.cell(r,2).alignment=ESQ
+wf.freeze_panes="A3"
 
-ws[f"B{r}"]="4) FIXOS x VARIAVEIS (continuidade no posto)"; ws[f"B{r}"].font=BOLD; ws[f"B{r}"].fill=VERDE_CLR
-ws.merge_cells(f"B{r}:G{r}")
-r += 1
-ws.merge_cells(f"B{r}:G{r}")
-ws[f"B{r}"]=("Estrategia: 1 TITULAR fixo por posto (mantem a mesma pessoa no mesmo posto). "
-            "Os demais sao VOLANTES/COBERTURA, que cobrem folgas, ferias e faltas e por isso tem posto variavel.")
-ws[f"B{r}"].alignment=LEFT; ws[f"B{r}"].font=Font(italic=True,size=9); ws.row_dimensions[r].height=28
-r += 1
-ws[f"B{r}"]="Categoria"; ws[f"C{r}"]="Qtde"; ws[f"D{r}"]="Observacao"
-ws.merge_cells(f"D{r}:G{r}")
-style_range(ws, f"B{r}:G{r}", VERDE_MED, BRANCO_BOLD)
-r += 1
-# titulares = 26+26+5+2 = 59
-ws[f"B{r}"]="Titulares (POSTO FIXO)"; ws[f"C{r}"]="=26+26+5+2"
-ws.merge_cells(f"D{r}:G{r}"); ws[f"D{r}"]="Um por posto (26 diurno + 26 tarde + 5 noite + 2 apoio)"
-ws[f"D{r}"].alignment=LEFT
-fixos_row=r
-style_range(ws, f"B{r}:C{r}"); ws[f"C{r}"].font=BOLD; ws[f"D{r}"].border=BORDA
-r += 1
-ws[f"B{r}"]="Volantes / Cobertura (POSTO VARIAVEL)"; ws[f"C{r}"]=f"=G{total_row}-C{fixos_row}"
-ws.merge_cells(f"D{r}:G{r}"); ws[f"D{r}"]="Cobrem folgas do 6x3, ferias e faltas; rodam entre postos"
-ws[f"D{r}"].alignment=LEFT
-style_range(ws, f"B{r}:C{r}", VERDE_SUAVE); ws[f"C{r}"].font=BOLD; ws[f"D{r}"].border=BORDA
-r += 2
+# ---------- ABA Postos
+wp=wb.create_sheet("Postos"); wp.sheet_view.showGridLines=False
+for c,w in zip("ABCD",[6,16,12,16]): wp.column_dimensions[c].width=w
+wp.merge_cells("A1:D1"); wp["A1"]="POSTOS"; wp["A1"].fill=VTIT; wp["A1"].font=T_; wp["A1"].alignment=CEN
+for i,h in enumerate(["ID","Malha","Posto","Turno"]): wp.cell(2,1+i,h)
+sr(wp,"A2:D2",VMED,WB_)
+r=3; pid=1
+for sh,(postos,nt,nv,lab) in SHIFTS.items():
+    for p in postos:
+        wp.cell(r,1,pid); wp.cell(r,2,MALHA.get(p, {"N":"NOITE","A":"APOIO"}[sh] if sh in "NA" else ""))
+        wp.cell(r,3,p); wp.cell(r,4,lab)
+        fill={"D":VSUA,"T":AZUL,"N":CINZA,"A":AMAR}[sh]; sr(wp,f"A{r}:D{r}",fill); r+=1; pid+=1
 
-ws[f"B{r}"]="5) HORA EXTRA (folga de seguranca)"; ws[f"B{r}"].font=BOLD; ws[f"B{r}"].fill=VERDE_CLR
-ws.merge_cells(f"B{r}:G{r}")
-r += 1
-ws.merge_cells(f"B{r}:G{r}")
-ws[f"B{r}"]=("Faltas/atestados imprevistos sao cobertos por hora extra (limite 52h/mes por pessoa). "
-            "Uma jornada de cobertura = 8,5h, entao cada pessoa pode fazer ate ~6 coberturas extras/mes. Ver aba 'Horas Extras'.")
-ws[f"B{r}"].alignment=LEFT; ws[f"B{r}"].font=Font(italic=True,size=9); ws.row_dimensions[r].height=30
+# ---------- ABA Calendario 2 anos (grade mestra)
+wc=wb.create_sheet("Calendario 2 anos"); wc.sheet_view.showGridLines=False
+wc.cell(1,1,"ID"); wc.cell(1,2,"Funcionario")
+wc.column_dimensions["A"].width=5; wc.column_dimensions["B"].width=24
+DATAS=[D0+timedelta(days=d) for d in range(730)]
+for d in range(730):
+    c=wc.cell(1,3+d,DATAS[d]); c.number_format="dd/mm"; c.font=Font(bold=True,size=8); c.alignment=CEN
+    wc.column_dimensions[get_column_letter(3+d)].width=7
+sr(wc,"A1:B1",VMED,WB_)
+for i,e in enumerate(emp):
+    r=2+i
+    wc.cell(r,1,e["id"]); wc.cell(r,2,e["nome"]).alignment=ESQ
+    for d in range(730):
+        c=wc.cell(r,3+d,status[i][d]); c.font=Font(size=8); c.alignment=CEN
+wc.freeze_panes="C2"
+# cores por status
+rng=f"C2:{get_column_letter(2+730)}{1+N}"
+wc.conditional_formatting.add(rng, FormulaRule(formula=['C2="FOLGA"'], fill=CINZA))
+wc.conditional_formatting.add(rng, FormulaRule(formula=['C2="FERIAS"'], fill=AMAR))
+wc.conditional_formatting.add(rng, FormulaRule(formula=['C2="RESERVA"'], fill=VSUA))
+wc.conditional_formatting.add(rng, FormulaRule(formula=['ISNUMBER(SEARCH("(HE)",C2))'], fill=LARJ))
+LAST_COL=get_column_letter(2+730)
 
-# ============================================================================
-# ABA 2 - POSTOS
-# ============================================================================
-postos_diurnos = [
-    ("CENTRO","BH/NL"),("CENTRO","SG/AR"),("CENTRO","BT"),("CENTRO","SL"),
-    ("LESTE","GV"),("LESTE","RA/PO"),("LESTE","TO/PR"),("LESTE","IP/AG"),
-    ("OESTE","DV/IJ"),("OESTE","FM/CL"),("OESTE","IA/CR"),
-    ("NORTE","MO/SI"),("NORTE","PT/AL"),("NORTE","JN/BC"),("NORTE","JB/PI"),
-    ("MANTIQUEIRA","JF/OP"),("MANTIQUEIRA","PN/LV"),("MANTIQUEIRA","LF/BD"),
-    ("TRIANGULO","UL/IR"),("TRIANGULO","PM/PS"),("TRIANGULO","TB/AF"),("TRIANGULO","UR/JM"),
-    ("SUL","PA/SJ"),("SUL","TC/FR"),("SUL","VR/AX"),
-    ("CENTRO","CN/MG"),  # 26o posto
-]
-postos_noite = [("NOITE","N1 (CENTRO+LESTE)"),("NOITE","N2 (OESTE)"),
-                ("NOITE","N3 (NORTE)"),("NOITE","N4 (MANTIQ+TRIANG)"),("NOITE","N5 (SUL)")]
-postos_apoio = [("APOIO","APOIO-1"),("APOIO","APOIO-2")]
+# ---------- ABA Visao Diaria
+vd=wb.create_sheet("Visao Diaria"); vd.sheet_view.showGridLines=False
+for c,w in zip("ABCD",[4,16,28,14]): vd.column_dimensions[c].width=w
+vd.merge_cells("A1:D1"); vd["A1"]="VISAO DIARIA - quem esta em cada posto"; vd["A1"].fill=VTIT; vd["A1"].font=T_; vd["A1"].alignment=CEN
+vd["A3"]="DATA:"; vd["A3"].font=B_
+vd["B3"]=D0; vd["B3"].number_format="dd/mm/yyyy"; vd["B3"].fill=AMAR; vd["B3"].font=B_
+# coluna do dia no calendario:
+vd["A4"]="(coluna)"; vd["B4"]="=MATCH(B3,'Calendario 2 anos'!$1:$1,0)-1"
+vd["A4"].font=Font(italic=True,size=8); vd["B4"].font=Font(italic=True,size=8)
+for i,h in enumerate(["#","Posto","Funcionario","Turno"]): vd.cell(6,1+i,h)
+sr(vd,"A6:D6",VMED,WB_)
+DATA_RANGE=f"'Calendario 2 anos'!$B$2:${LAST_COL}${1+N}"
+r=7; n=1
+for sh,(postos,nt,nv,lab) in SHIFTS.items():
+    for p in postos:
+        vd.cell(r,1,n); vd.cell(r,2,p); vd.cell(r,4,lab)
+        # procura na coluna do dia (offset = B4) o posto p e devolve o nome (col 1 do range)
+        f=(f'=IFERROR(INDEX({DATA_RANGE},'
+           f'MATCH(B{r},INDEX({DATA_RANGE},0,$B$4),0),1),"-")')
+        vd.cell(r,3,f).alignment=ESQ
+        sr(vd,f"A{r}:D{r}", {"D":VSUA,"T":AZUL,"N":CINZA,"A":AMAR}[sh]); r+=1; n+=1
+vd.freeze_panes="A7"
 
-ws2 = wb.create_sheet("Postos")
-ws2.sheet_view.showGridLines = False
-for col,w in zip("ABCD",[4,16,22,18]): ws2.column_dimensions[col].width=w
-ws2.merge_cells("B2:D2"); ws2["B2"]="CADASTRO DE POSTOS"; ws2["B2"].fill=VERDE_TIT; ws2["B2"].font=TITULO; ws2["B2"].alignment=CENTER
-hdr=["Cod","Malha","Posto","Turno"]
-ws2["A4"]="ID"
-for i,h in enumerate(["Malha","Posto","Turno"]): ws2.cell(4,2+i,h)
-style_range(ws2,"A4:D4",VERDE_MED,BRANCO_BOLD)
-rr=5; pid=1
-for grupo, lst, turno in [("Diurno",postos_diurnos,"07:00-15:30"),
-                          ("Tarde",postos_diurnos,"15:00-23:30"),
-                          ("Noite",postos_noite,"23:00-07:30"),
-                          ("Apoio",postos_apoio,"Apoio seg-sex")]:
-    for malha, posto in lst:
-        ws2.cell(rr,1,pid); ws2.cell(rr,2,malha); ws2.cell(rr,3,posto); ws2.cell(rr,4,turno)
-        fill = {"Diurno":VERDE_SUAVE,"Tarde":AZUL_CLR,"Noite":CINZA,"Apoio":AMARELO}[grupo]
-        style_range(ws2,f"A{rr}:D{rr}",fill)
-        rr+=1; pid+=1
+# ---------- ABA Visao Funcionario
+vf=wb.create_sheet("Visao Funcionario"); vf.sheet_view.showGridLines=False
+for c,w in zip("ABC",[14,16,18]): vf.column_dimensions[c].width=w
+vf.merge_cells("A1:C1"); vf["A1"]="VISAO POR FUNCIONARIO"; vf["A1"].fill=VTIT; vf["A1"].font=T_; vf["A1"].alignment=CEN
+vf["A3"]="ID FUNCIONARIO:"; vf["A3"].font=B_
+vf["B3"]=1; vf["B3"].fill=AMAR; vf["B3"].font=B_
+vf["A4"]="Nome:"; vf["A4"].font=B_
+vf["B4"]="=IFERROR(INDEX(Funcionarios!$B:$B,MATCH(B3,Funcionarios!$A:$A,0)),\"\")"
+vf["A5"]="Linha calend.:"; vf["B5"]="=MATCH(B3,'Calendario 2 anos'!$A:$A,0)"
+vf["A5"].font=Font(italic=True,size=8); vf["B5"].font=Font(italic=True,size=8)
+vf["A7"]="Data"; vf["B7"]="Dia"; vf["C7"]="Posto / Status"
+sr(vf,"A7:C7",VMED,WB_)
+DIAS_SEM=["seg","ter","qua","qui","sex","sab","dom"]
+for k in range(120):  # proximos 120 dias a partir de B3 data inicial fixa D0
+    r=8+k
+    vf.cell(r,1,f"='Calendario 2 anos'!{get_column_letter(3+k)}$1"); vf.cell(r,1).number_format="dd/mm/yyyy"
+    vf.cell(r,2,f'=TEXT({get_column_letter(1)}{r},"ddd")')
+    vf.cell(r,3,f"=INDEX('Calendario 2 anos'!{get_column_letter(3+k)}:{get_column_letter(3+k)},$B$5)").alignment=ESQ
+    sr(vf,f"A{r}:C{r}",None)
+vf.freeze_panes="A8"
 
-# ============================================================================
-# ABA 3 - FUNCIONARIOS
-# ============================================================================
-ws3 = wb.create_sheet("Funcionarios")
-ws3.sheet_view.showGridLines=False
-for col,w in zip("ABCDEF",[4,26,16,18,16,16]): ws3.column_dimensions[col].width=w
-ws3.merge_cells("B2:F2"); ws3["B2"]="CADASTRO DE FUNCIONARIOS"; ws3["B2"].fill=VERDE_TIT; ws3["B2"].font=TITULO; ws3["B2"].alignment=CENTER
-heads=["ID","Nome","Tipo","Turno base","Posto titular","Inicio ferias"]
-for i,h in enumerate(heads): ws3.cell(4,1+i,h)
-style_range(ws3,"A4:F4",VERDE_MED,BRANCO_BOLD)
-# 98 funcionarios: nomes da foto + genericos
-nomes_foto = ["Felipe Generoso","Cristiano Alisson","Marcelo Thiersch","Elenise Ceres",
-"Rodrigo Mesquita","Leandro Bruno","Samuel Mazoni","Vinicius Lima","Victor Ricarte",
-"Hugo Tavares","Joao Paulo","Linneker Amaral","Wesley Ramos","Normando Guimaraes",
-"Ronaldo Soares","Andre dos Anjos","Samuel Henrique","Welinton Barbosa","Marllon Bastos",
-"Gilmar Jose","Leonardo Henrique","Nicolas Augusto","Antonio Carlos","Rafel Teles","Erick Garcia"]
-dv=DataValidation(type="list",formula1='"Titular,Volante"',allow_blank=True)
-ws3.add_data_validation(dv)
-TOTAL_FUNC=98
-for i in range(TOTAL_FUNC):
-    rr=5+i
-    nome = nomes_foto[i] if i<len(nomes_foto) else f"Funcionario {i+1:03d}"
-    tipo = "Titular" if i<59 else "Volante"
-    ws3.cell(rr,1,i+1); ws3.cell(rr,2,nome).alignment=LEFT
-    c=ws3.cell(rr,3,tipo); dv.add(c)
-    ws3.cell(rr,4,""); ws3.cell(rr,5,""); ws3.cell(rr,6,"")
-    style_range(ws3,f"A{rr}:F{rr}", VERDE_SUAVE if tipo=="Titular" else AZUL_CLR)
-    ws3.cell(rr,2).alignment=LEFT
+# ---------- ABA Banco Conhecimento
+bc=wb.create_sheet("Banco Conhecimento"); bc.sheet_view.showGridLines=False
+for c,w in zip("ABCDEFGHI",[6,24,10,12,14,12,12,14,14]): bc.column_dimensions[c].width=w
+bc.merge_cells("A1:I1"); bc["A1"]="BANCO DE CONHECIMENTO (pesos por posto)"; bc["A1"].fill=VTIT; bc["A1"].font=T_; bc["A1"].alignment=CEN
+bc.merge_cells("A2:I2"); bc["A2"]="+1 ponto por dia despachado. Apos 180 dias sem despachar, perde 1 ponto/dia ate zerar."
+bc["A2"].alignment=ESQ; bc["A2"].font=Font(italic=True,size=9)
+bc["A3"]="HOJE:"; bc["B3"]="=TODAY()"; bc["B3"].number_format="dd/mm/yyyy"; bc["A3"].font=B_
+for i,h in enumerate(["ID","Funcionario","Posto","Pontos brutos","Ultimo despacho","Dias parado","Decaimento","Pontos efetivos","Nivel"]):
+    bc.cell(5,1+i,h)
+sr(bc,"A5:I5",VMED,WB_)
+# exporta todos os pares com pontos>0
+nome_by_id={e["id"]:e["nome"] for e in emp}
+pares=sorted([k for k in pts if pts[k]>0], key=lambda k:(k[0], -pts[k]))
+r=6
+for (eid,p) in pares:
+    ult = D0+timedelta(days=last[(eid,p)]) if last[(eid,p)]>=0 else D0
+    bc.cell(r,1,eid); bc.cell(r,2,nome_by_id[eid]).alignment=ESQ; bc.cell(r,3,p)
+    bc.cell(r,4,pts[(eid,p)]); c=bc.cell(r,5,ult); c.number_format="dd/mm/yyyy"
+    bc.cell(r,6,f'=$B$3-E{r}')
+    bc.cell(r,7,f'=MAX(0,F{r}-180)')
+    bc.cell(r,8,f'=MAX(0,D{r}-G{r})')
+    bc.cell(r,9,f'=IF(H{r}>=180,"Especialista",IF(H{r}>=60,"Apto",IF(H{r}>0,"Basico","Sem pratica")))')
+    sr(bc,f"A{r}:I{r}",None); bc.cell(r,2).alignment=ESQ; r+=1
+bc.freeze_panes="A6"
+BC_LAST=r-1
 
-# ============================================================================
-# ABA 4 - ESCALA (modelo no padrao da foto)
-# ============================================================================
-ws4 = wb.create_sheet("Escala (modelo)")
-ws4.sheet_view.showGridLines=False
-for col,w in zip("ABCD",[4,18,16,26]): ws4.column_dimensions[col].width=w
-ws4.merge_cells("A1:D1")
-ws4["A1"]="DIA 04/06/2026 - TURNO 07:00 as 15:30 h (G1)"
-ws4["A1"].fill=VERDE_MED; ws4["A1"].font=BRANCO_BOLD; ws4["A1"].alignment=CENTER
-for i,h in enumerate(["MALHA","POSTO","TECNICO"]):
-    ws4.cell(2,1+i,h)
-ws4.merge_cells("C2:D2")
-style_range(ws4,"A2:D2",VERDE_CLR,BOLD)
-rr=3
-malha_atual=None; ini=None
-diurnos_so = postos_diurnos
-for idx,(malha,posto) in enumerate(diurnos_so):
-    ws4.cell(rr,2,posto)
-    ws4.merge_cells(f"C{rr}:D{rr}")
-    ws4.cell(rr,3,"")  # preencher tecnico
-    style_range(ws4,f"A{rr}:D{rr}",VERDE_SUAVE)
-    if malha!=malha_atual:
-        if malha_atual is not None:
-            ws4.merge_cells(f"A{ini}:A{rr-1}")
-            ws4.cell(ini,1,malha_atual).alignment=CENTER
-        malha_atual=malha; ini=rr
-    rr+=1
-ws4.merge_cells(f"A{ini}:A{rr-1}"); ws4.cell(ini,1,malha_atual).alignment=CENTER
-ws4.cell(rr,1,"Supervisor"); ws4.merge_cells(f"A{rr}:B{rr}")
-ws4.merge_cells(f"C{rr}:D{rr}"); ws4.cell(rr,3,"")
-style_range(ws4,f"A{rr}:D{rr}",VERDE_MED,BRANCO_BOLD)
+# ---------- ABA Substituicao (ranking)
+sb=wb.create_sheet("Substituicao"); sb.sheet_view.showGridLines=False
+for c,w in zip("ABCDEFG",[6,24,12,14,16,12,14]): sb.column_dimensions[c].width=w
+sb.merge_cells("A1:G1"); sb["A1"]="SUBSTITUICAO - melhores candidatos"; sb["A1"].fill=VTIT; sb["A1"].font=T_; sb["A1"].alignment=CEN
+sb["A3"]="DATA:"; sb["B3"]=D0; sb["B3"].number_format="dd/mm/yyyy"; sb["B3"].fill=AMAR; sb["B3"].font=B_; sb["A3"].font=B_
+sb["A4"]="POSTO:"; sb["B4"]="BH/NL"; sb["B4"].fill=AMAR; sb["B4"].font=B_; sb["A4"].font=B_
+sb["A5"]="Quem faltou (ID):"; sb["B5"]=1; sb["B5"].fill=AMAR; sb["B5"].font=B_; sb["A5"].font=B_
+sb["D3"]="Col. do dia:"; sb["E3"]="=MATCH(B3,'Calendario 2 anos'!$1:$1,0)"
+sb["D4"]="Col. dia ant.:"; sb["E4"]="=E3-1"
+for c in ("D3","D4"): sb[c].font=Font(italic=True,size=8)
+for c in ("E3","E4"): sb[c].font=Font(italic=True,size=8)
+sb.merge_cells("A7:G7"); sb["A7"]=("Ranking: pontuacao = Pontos de conhecimento no posto + bonus de 1000 se a pessoa "
+ "ja estava NESTE posto no dia anterior. So entram pessoas DISPONIVEIS (FOLGA/RESERVA) e diferentes de quem faltou.")
+sb["A7"].alignment=ESQ; sb["A7"].font=Font(italic=True,size=9)
+hdr=["ID","Funcionario","Status no dia","Estava no posto ontem?","Conhecimento (efetivo)","Bonus ontem","PONTUACAO"]
+for i,h in enumerate(hdr): sb.cell(9,1+i,h)
+sr(sb,"A9:G9",VMED,WB_)
+# uma linha por funcionario (todos), formulas
+DATA_COL_REF=f"'Calendario 2 anos'!INDEX($A:${LAST_COL},0,$E$3)"  # nao usado direto
+for i,e in enumerate(emp):
+    r=10+i
+    eid=e["id"]
+    rowcal=2+i  # linha no calendario
+    sb.cell(r,1,eid); sb.cell(r,2,e["nome"]).alignment=ESQ
+    # status no dia = celula calendario(linha, col E3)
+    sb.cell(r,3,f"=INDEX('Calendario 2 anos'!$A:${LAST_COL},{rowcal},$E$3)").alignment=ESQ
+    # estava no posto ontem?
+    sb.cell(r,4,f'=IF(INDEX(\'Calendario 2 anos\'!$A:${LAST_COL},{rowcal},$E$4)=$B$4,1,0)')
+    # conhecimento efetivo: procura na aba Banco (ID + posto). usa SUMIFS sobre col H (efetivo) - mas H e formula; usamos D-decaimento via SUMPRODUCT
+    sb.cell(r,5,(f'=IFERROR(SUMIFS(\'Banco Conhecimento\'!$H$6:$H${BC_LAST},'
+                 f'\'Banco Conhecimento\'!$A$6:$A${BC_LAST},$A{r},'
+                 f'\'Banco Conhecimento\'!$C$6:$C${BC_LAST},$B$4),0)'))
+    sb.cell(r,6,f'=D{r}*1000')
+    # pontuacao: so se disponivel (FOLGA ou RESERVA) e nao for quem faltou
+    sb.cell(r,7,(f'=IF(AND($A{r}<>$B$5,OR(C{r}="FOLGA",C{r}="RESERVA")),E{r}+F{r},-1)'))
+    sr(sb,f"A{r}:G{r}",None); sb.cell(r,2).alignment=ESQ
+sb.cell(9+N+2,1,"DICA: ordene a tabela pela coluna PONTUACAO (maior->menor) para ver o melhor substituto no topo.")
+sb.cell(9+N+2,1).font=Font(italic=True,size=9)
+sb.freeze_panes="A10"
 
-# ============================================================================
-# ABA 5 - BANCO DE CONHECIMENTO (PESOS) com decaimento
-# ============================================================================
-ws5 = wb.create_sheet("Banco Conhecimento")
-ws5.sheet_view.showGridLines=False
-ws5.merge_cells("B2:I2")
-ws5["B2"]="BANCO DE CONHECIMENTO - PESOS POR POSTO"
-ws5["B2"].fill=VERDE_TIT; ws5["B2"].font=TITULO; ws5["B2"].alignment=CENTER
-# Regras
-ws5.merge_cells("B3:I3")
-ws5["B3"]=("Regra: +1 ponto por dia despachado no posto. Apos 180 dias (6 meses) sem despachar, "
-           "perde 1 ponto por dia ate zerar. 'Pontos efetivos' aplica o decaimento automaticamente.")
-ws5["B3"].alignment=LEFT; ws5["B3"].font=Font(italic=True,size=9); ws5.row_dimensions[3].height=28
-ws5["B5"]="HOJE:"; ws5["C5"]="=TODAY()"; ws5["C5"].number_format="dd/mm/yyyy"; ws5["B5"].font=BOLD
+# ---------- ABA Horas Extras
+he=wb.create_sheet("Horas Extras"); he.sheet_view.showGridLines=False
+for c,w in zip("ABCDEFG",[6,24,12,16,10,10,14]): he.column_dimensions[c].width=w
+he.merge_cells("A1:G1"); he["A1"]="HORAS EXTRAS (limite 52h/mes)"; he["A1"].fill=VTIT; he["A1"].font=T_; he["A1"].alignment=CEN
+for i,h in enumerate(["ID","Funcionario","Mes/Ano","Horas realizadas","Limite","Saldo","Status"]): he.cell(3,1+i,h)
+sr(he,"A3:G3",VMED,WB_)
+# agrega HE gerados por pessoa e mes
+from collections import defaultdict
+agg=defaultdict(float)
+for d,p,eid in he_events:
+    dt=D0+timedelta(days=d); mes=dt.strftime("%m/%Y")
+    agg[(eid,mes)]+=8.5
+rows=sorted(agg.items(), key=lambda x:(-x[1]))[:60]
+r=4
+for (eid,mes),h in rows:
+    he.cell(r,1,eid); he.cell(r,2,nome_by_id[eid]).alignment=ESQ; he.cell(r,3,mes)
+    he.cell(r,4,round(h,1)); he.cell(r,5,52); he.cell(r,6,f"=E{r}-D{r}")
+    he.cell(r,7,f'=IF(D{r}>E{r},"EXCEDIDO",IF(D{r}>=E{r}*0.9,"ATENCAO","OK"))')
+    sr(he,f"A{r}:G{r}",None); he.cell(r,2).alignment=ESQ; r+=1
+he.conditional_formatting.add(f"G4:G{r-1}", CellIsRule(operator="equal", formula=['"EXCEDIDO"'], fill=VERM))
+he.conditional_formatting.add(f"G4:G{r-1}", CellIsRule(operator="equal", formula=['"ATENCAO"'], fill=AMAR))
+he.freeze_panes="A4"
 
-heads=["ID Func.","Funcionario","Posto","Dias despachados","Ultimo despacho",
-       "Dias parado","Decaimento","Pontos efetivos","Nivel"]
-for i,h in enumerate(heads): ws5.cell(7,2+i,h)
-style_range(ws5,"B7:J7",VERDE_MED,BRANCO_BOLD)
-for col,w in zip("ABCDEFGHIJ",[3,9,24,16,16,16,12,12,14,12]): ws5.column_dimensions[col].width=w
-
-# Exemplos preenchidos (alguns) + estrutura para preencher
-exemplos=[
- (1,"Felipe Generoso","BH/NL",420, date(2026,6,1)),
- (1,"Felipe Generoso","SG/AR",35,  date(2025,9,10)),
- (4,"Elenise Ceres","SL",380,      date(2026,5,28)),
- (25,"Erick Garcia","VR/AX",512,   date(2026,6,3)),
- (25,"Erick Garcia","PA/SJ",18,    date(2025,7,1)),
- (7,"Samuel Mazoni","TO/PR",260,   date(2026,5,30)),
-]
-rr=8
-for fid,nome,posto,dias,ult in exemplos:
-    ws5.cell(rr,2,fid)
-    ws5.cell(rr,3,nome).alignment=LEFT
-    ws5.cell(rr,4,posto)
-    ws5.cell(rr,5,dias)
-    c=ws5.cell(rr,6,ult); c.number_format="dd/mm/yyyy"
-    ws5.cell(rr,7,f'=IF(F{rr}="","",$C$5-F{rr})')          # dias parado
-    ws5.cell(rr,8,f'=IF(F{rr}="",0,MAX(0,G{rr}-180))')     # decaimento
-    ws5.cell(rr,9,f'=MAX(0,E{rr}-H{rr})')                  # pontos efetivos
-    ws5.cell(rr,10,f'=IF(I{rr}>=180,"Especialista",IF(I{rr}>=60,"Apto",IF(I{rr}>0,"Basico","Sem pratica")))')
-    style_range(ws5,f"B{rr}:J{rr}",VERDE_SUAVE)
-    ws5.cell(rr,3).alignment=LEFT
-    rr+=1
-# linhas em branco prontas com formula
-for _ in range(40):
-    ws5.cell(rr,7,f'=IF(F{rr}="","",$C$5-F{rr})')
-    ws5.cell(rr,8,f'=IF(F{rr}="",0,MAX(0,G{rr}-180))')
-    ws5.cell(rr,9,f'=IF(E{rr}="","",MAX(0,E{rr}-H{rr}))')
-    ws5.cell(rr,10,f'=IF(E{rr}="","",IF(I{rr}>=180,"Especialista",IF(I{rr}>=60,"Apto",IF(I{rr}>0,"Basico","Sem pratica"))))')
-    style_range(ws5,f"B{rr}:J{rr}",None)
-    rr+=1
-
-# ============================================================================
-# ABA 6 - HORAS EXTRAS
-# ============================================================================
-ws6 = wb.create_sheet("Horas Extras")
-ws6.sheet_view.showGridLines=False
-ws6.merge_cells("B2:H2")
-ws6["B2"]="CONTROLE DE HORAS EXTRAS (limite 52h/mes)"
-ws6["B2"].fill=VERDE_TIT; ws6["B2"].font=TITULO; ws6["B2"].alignment=CENTER
-heads=["ID","Funcionario","Mes/Ano","Horas realizadas","Limite","Saldo","Status"]
-for i,h in enumerate(heads): ws6.cell(4,2+i,h)
-style_range(ws6,"B4:H4",VERDE_MED,BRANCO_BOLD)
-for col,w in zip("ABCDEFGH",[3,8,26,14,16,10,10,18]): ws6.column_dimensions[col].width=w
-rr=5
-for i in range(30):
-    ws6.cell(rr,6,52)  # limite
-    ws6.cell(rr,7,f'=IF(E{rr}="","",F{rr}-E{rr})')  # saldo
-    ws6.cell(rr,8,f'=IF(E{rr}="","",IF(E{rr}>F{rr},"EXCEDIDO",IF(E{rr}>=F{rr}*0.9,"ATENCAO","OK")))')
-    if i<3:
-        ws6.cell(rr,2,[1,7,25][i]); ws6.cell(rr,3,["Felipe Generoso","Samuel Mazoni","Erick Garcia"][i]).alignment=LEFT
-        ws6.cell(rr,4,"06/2026"); ws6.cell(rr,5,[34,51,17][i])
-    style_range(ws6,f"B{rr}:H{rr}",VERDE_SUAVE if i<3 else None)
-    rr+=1
-
-# Formatacao condicional simples nao essencial; salvar
 wb.save("Escala_Centro_Operacoes.xlsx")
-print("OK - arquivo gerado")
+print("OK. HE events:",len(he_events)," Descobertos:",descobertos," Pares conhecimento:",len(pares))
