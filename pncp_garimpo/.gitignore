@@ -1,0 +1,7 @@
+# Artefatos gerados em runtime
+__pycache__/
+*.pyc
+
+# Saídas geradas pelos scripts (regeradas a cada execução)
+saida_radar.csv
+saida_viabilidade.csv
