@@ -18,7 +18,12 @@ Duas camadas independentes:
    aberto*, filtra por UF, palavras-chave do objeto e teto de valor, e **ranqueia
    por favorabilidade** com uma heurística transparente. Salva `saida_radar.csv`.
 
-2. **`viabilidade.py` — Estimador de viabilidade.** Para os melhores editais do
+2. **`itens.py` — Detalhe de itens.** A coluna "valor" do radar é o *total* da
+   compra; este script desce ao nível de item e mostra **descrição, quantidade,
+   unidade e preço unitário estimado** (mais o benefício ME/EPP quando exclusivo),
+   pra você ver "por quanto dá pra fornecer". Salva `saida_itens.csv`.
+
+3. **`viabilidade.py` — Estimador de viabilidade.** Para os melhores editais do
    radar, cruza o histórico de `/v1/contratos` do **mesmo órgão** e estima
    concorrência (proxy), vencedores recorrentes, **preço-alvo** e margem. Produz um
    **score de viabilidade com explicação textual** fator a fator. Salva
@@ -69,7 +74,11 @@ python3 radar.py --resumo        # tabela enxuta: o que compram + valor + preço
 python3 radar.py --top 30        # mostra 30 no terminal
 python3 radar.py --debug         # imprime o JSON real do 1º item (introspecção)
 
-# 2) Viabilidade — analisa os melhores do radar
+# 2) Itens — preço unitário e quantidade de cada edital
+python3 itens.py                 # detalha os 10 melhores → saida_itens.csv
+python3 itens.py --top 20        # detalha os 20 melhores
+
+# 3) Viabilidade — analisa os melhores do radar
 python3 viabilidade.py           # usa saida_radar.csv (top 5)
 python3 viabilidade.py --top 8   # analisa os 8 melhores
 python3 viabilidade.py --debug   # imprime o JSON real de um contrato
@@ -138,6 +147,7 @@ pncp_garimpo/
 ├── config.py        # [MEUS DADOS] + parâmetros de busca
 ├── pncp_api.py      # cliente HTTP (urllib): paginação, retry/backoff, introspecção
 ├── radar.py         # Camada 1 — radar de oportunidades
+├── itens.py         # Detalhe de itens (preço unitário, quantidade, benefício ME/EPP)
 ├── viabilidade.py   # Camada 2 — estimador de viabilidade
 └── README.md
 ```

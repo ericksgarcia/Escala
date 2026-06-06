@@ -111,9 +111,13 @@ PORTAL_TRANSPARENCIA_API_KEY = ""
 # ---------------------------------------------------------------------------
 
 BASE_URL = "https://pncp.gov.br/api/consulta"
+# Base da API "pncp" (itens do edital — preço unitário e quantidade ficam aqui,
+# não na API de consulta).
+BASE_PNCP = "https://pncp.gov.br/api/pncp"
 TIMEOUT = 40           # segundos por requisição
 MAX_TENTATIVAS = 4     # retries com backoff exponencial (2s, 4s, 8s, 16s)
 
 # Arquivos de saída
 CSV_RADAR = "saida_radar.csv"
 CSV_VIABILIDADE = "saida_viabilidade.csv"
+CSV_ITENS = "saida_itens.csv"

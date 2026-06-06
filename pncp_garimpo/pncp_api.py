@@ -40,19 +40,14 @@ def _montar_url(endpoint, params):
     return url
 
 
-def requisitar(endpoint, params=None):
+def _buscar_url(url):
     """
-    Faz UMA requisição GET e devolve o JSON decodificado (dict).
+    Núcleo de requisição GET (JSON) com retry e backoff exponencial.
 
-    Levanta ErroRede após esgotar as tentativas. Em HTTP 204 (sem conteúdo)
-    devolve um "envelope" vazio padronizado.
-
-    Importante: alguns códigos de modalidade inválidos retornam HTML/erro em vez
-    de JSON. Nesse caso, levantamos ValueError para o chamador poder PULAR o item.
+    Devolve o JSON decodificado. Levanta ErroRede após esgotar as tentativas e
+    ValueError para respostas 4xx / não-JSON (o chamador decide se pula).
     """
-    url = _montar_url(endpoint, params)
     ultima_excecao = None
-
     for tentativa in range(config.MAX_TENTATIVAS):
         try:
             req = urllib.request.Request(
@@ -81,11 +76,52 @@ def requisitar(endpoint, params=None):
 
         # Backoff exponencial: 2s, 4s, 8s, 16s
         if tentativa < config.MAX_TENTATIVAS - 1:
-            espera = 2 ** (tentativa + 1)
-            time.sleep(espera)
+            time.sleep(2 ** (tentativa + 1))
 
     raise ErroRede("Falha ao acessar {} após {} tentativas: {}".format(
         url, config.MAX_TENTATIVAS, ultima_excecao))
+
+
+def requisitar(endpoint, params=None):
+    """
+    Faz UMA requisição GET à API de CONSULTA e devolve o JSON decodificado.
+
+    Levanta ErroRede após esgotar as tentativas; ValueError para 4xx/não-JSON
+    (ex.: códigos de modalidade inválidos devolvem HTML — o chamador pula).
+    """
+    return _buscar_url(_montar_url(endpoint, params))
+
+
+def buscar_itens_edital(numero_controle):
+    """
+    Busca os ITENS de um edital (preço unitário, quantidade, unidade, descrição).
+
+    Os itens NÃO estão na API de consulta; ficam na API pncp:
+      /api/pncp/v1/orgaos/{cnpj}/compras/{ano}/{sequencial}/itens
+    O identificador vem do numeroControlePNCP ('{cnpj}-{tipo}-{seq}/{ano}').
+    Validado em runtime: devolve lista com valorUnitarioEstimado, quantidade,
+    unidadeMedida, valorTotal, descricao, orcamentoSigiloso, tipoBeneficioNome.
+
+    Devolve [] em qualquer erro (nunca quebra o fluxo).
+    """
+    if not numero_controle:
+        return []
+    try:
+        esquerda, ano = numero_controle.split("/")
+        cnpj, _tipo, sequencial = esquerda.split("-")
+        seq = int(sequencial)
+    except (ValueError, TypeError):
+        return []
+    url = "{}/v1/orgaos/{}/compras/{}/{}/itens".format(
+        config.BASE_PNCP.rstrip("/"), cnpj, ano, seq)
+    try:
+        dados = _buscar_url(url)
+    except (ErroRede, ValueError):
+        return []
+    # O endpoint devolve uma lista direta; tolera envelope {"data": [...]}.
+    if isinstance(dados, dict):
+        dados = dados.get("data") or []
+    return dados if isinstance(dados, list) else []
 
 
 def paginar(endpoint, params=None, max_paginas=None, verbose=False):
