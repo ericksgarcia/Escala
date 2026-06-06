@@ -36,9 +36,10 @@ def detalhar_itens(edital):
     linhas = []
     for it in itens:
         sigiloso = api.pegar(it, "orcamentoSigiloso", False)
+        descricao = api.corrigir_texto(api.pegar(it, "descricao", "") or "")
         linhas.append({
             "item": api.pegar(it, "numeroItem", ""),
-            "descricao": " ".join((api.pegar(it, "descricao", "") or "").split()),
+            "descricao": " ".join(descricao.split()),
             "quantidade": api.pegar(it, "quantidade", ""),
             "unidade": api.pegar(it, "unidadeMedida", ""),
             "preco_unitario": None if sigiloso else api.pegar(it, "valorUnitarioEstimado"),
@@ -52,7 +53,7 @@ def detalhar_itens(edital):
 def imprimir(edital, itens):
     print("\n" + "=" * 78)
     print("{} — {}/{}".format(edital["orgao"], edital["municipio"], edital["uf"]))
-    print("Compra: {}".format((edital["objeto"] or "")[:110]))
+    print("Compra: {}".format(api.corrigir_texto(edital.get("objeto") or "")))
     print("Total estimado: {} | encerra {} | {}".format(
         _moeda(edital.get("valor_estimado")), edital.get("encerramento", ""),
         edital.get("link_edital", "")))
@@ -60,15 +61,18 @@ def imprimir(edital, itens):
         print("  (sem itens estruturados disponíveis para este edital)")
         return
     print("-" * 78)
-    print("  {:<46} {:>10} {:>14}".format("ITEM (descrição)", "QTD x UN", "PREÇO UNIT."))
+    # Descrição COMPLETA de cada item (pra você pesquisar o preço), seguida de
+    # quantidade, unidade, preço unitário e total estimados.
     for it in itens:
         qtd_un = "{:g} {}".format(float(it["quantidade"]), it["unidade"]) \
             if str(it["quantidade"]).strip() not in ("", "None") else "-"
         preco = "(sigiloso)" if it["sigiloso"] else _moeda(it["preco_unitario"])
-        desc = "{}. {}".format(it["item"], it["descricao"])[:46]
-        print("  {:<46} {:>10} {:>14}".format(desc, qtd_un[:10], preco))
+        total = "" if it["sigiloso"] else "  (total {})".format(_moeda(it["total"]))
+        benef = ""
         if it["beneficio"] and it["beneficio"] not in ("Não se aplica", ""):
-            print("      └ benefício: {}".format(it["beneficio"]))
+            benef = "  [{}]".format(it["beneficio"])
+        print("\n  [item {}] {}".format(it["item"], it["descricao"]))
+        print("           {} × {}{}{}".format(qtd_un, preco, total, benef))
 
 
 def salvar_csv(linhas, caminho):
@@ -118,7 +122,7 @@ def main(argv):
         for it in itens:
             saida.append({
                 "orgao": ed["orgao"], "municipio": ed["municipio"], "uf": ed["uf"],
-                "objeto_compra": ed["objeto"], "item": it["item"],
+                "objeto_compra": api.corrigir_texto(ed.get("objeto") or ""), "item": it["item"],
                 "descricao": it["descricao"], "quantidade": it["quantidade"],
                 "unidade": it["unidade"],
                 "preco_unitario_estimado": "" if it["sigiloso"] else it["preco_unitario"],

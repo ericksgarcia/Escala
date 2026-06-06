@@ -167,6 +167,22 @@ def paginar(endpoint, params=None, max_paginas=None, verbose=False):
         pagina += 1
 
 
+def corrigir_texto(s):
+    """
+    Corrige "mojibake" (texto UTF-8 que foi gravado como latin-1) presente em
+    parte dos dados do PNCP — ex.: 'ÃCIDO ÃRICO' -> 'ÁCIDO ÚRICO'.
+
+    Aplica a reversão só quando ela produz UTF-8 válido; caso contrário devolve
+    o texto original (strings já corretas não são alteradas).
+    """
+    if not s:
+        return s
+    try:
+        return s.encode("latin-1").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return s
+
+
 def pegar(dicionario, caminho, padrao=None):
     """
     Acesso seguro a campos aninhados via caminho pontilhado.

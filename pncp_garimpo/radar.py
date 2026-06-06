@@ -207,7 +207,7 @@ def filtrar_e_pontuar(editais):
     """Aplica filtro de palavra-chave + teto e devolve linhas pontuadas e ordenadas."""
     linhas = []
     for ed in editais:
-        objeto = api.pegar(ed, "objetoCompra", "")
+        objeto = api.corrigir_texto(api.pegar(ed, "objetoCompra", ""))
         palavras = _casa_palavra_chave(objeto)
         if not palavras:
             continue
