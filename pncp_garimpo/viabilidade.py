@@ -48,28 +48,48 @@ def _normalizar(texto):
 # Coleta de histórico de contratos do órgão
 # ---------------------------------------------------------------------------
 
+# A API /v1/contratos rejeita (HTTP 422) janelas de data maiores que 365 dias.
+# Validado em runtime (2026-06): 365 dias OK, 366 dias -> 422. Por isso quebramos
+# o período pedido em janelas seguras de no máximo 364 dias e agregamos.
+_MAX_JANELA_DIAS = 364
+
+
 def buscar_contratos_orgao(cnpj_orgao, meses, debug=False):
     """
     Puxa contratos firmados pelo órgão nos últimos `meses`, paginando.
 
-    /v1/contratos exige janela de datas (dataInicial/dataFinal, yyyymmdd) e
-    aceita cnpjOrgao para filtrar por órgão — validado em runtime.
+    /v1/contratos exige janela de datas (dataInicial/dataFinal, yyyymmdd), aceita
+    cnpjOrgao para filtrar por órgão, e LIMITA o período a 365 dias. Quebramos o
+    intervalo em pedaços de ≤364 dias para suportar qualquer histórico sem 422.
     """
     if not cnpj_orgao:
         return []
-    hoje = date.today()
-    inicial = (hoje - timedelta(days=int(meses * 30.5))).strftime("%Y%m%d")
-    final = hoje.strftime("%Y%m%d")
-    params = {"dataInicial": inicial, "dataFinal": final, "cnpjOrgao": cnpj_orgao}
 
+    hoje = date.today()
+    dias_totais = int(meses * 30.5)
     contratos = []
     introspeccionado = False
-    for item in api.paginar("/v1/contratos", params,
-                            max_paginas=config.VIABILIDADE_MAX_PAGINAS):
-        if debug and not introspeccionado:
-            api.introspeccionar(item, "CONTRATO (formato real)")
-            introspeccionado = True
-        contratos.append(item)
+
+    fim = hoje
+    restante = dias_totais
+    while restante > 0:
+        pedaco = min(restante, _MAX_JANELA_DIAS)
+        inicio = fim - timedelta(days=pedaco)
+        params = {
+            "dataInicial": inicio.strftime("%Y%m%d"),
+            "dataFinal": fim.strftime("%Y%m%d"),
+            "cnpjOrgao": cnpj_orgao,
+        }
+        for item in api.paginar("/v1/contratos", params,
+                                max_paginas=config.VIABILIDADE_MAX_PAGINAS):
+            if debug and not introspeccionado:
+                api.introspeccionar(item, "CONTRATO (formato real)")
+                introspeccionado = True
+            contratos.append(item)
+        # Próxima janela retrocede 1 dia para não repetir a data de fronteira.
+        fim = inicio - timedelta(days=1)
+        restante -= (pedaco + 1)
+
     return contratos
 
 
@@ -149,8 +169,11 @@ def estimar_viabilidade(edital, stats, impedidos=None):
     # --- Preço-alvo ---
     # (a) histórico: mediana dos valores vencedores similares (dado real).
     # (b) desconto: estimado do edital menos um desconto típico (palpite).
+    # Ignoramos o estimado quando ele é simbólico/sigiloso (< piso confiável),
+    # senão o preço-alvo viraria lixo (ex.: R$ 0,02 da festa do peão).
     preco_hist = stats["valor_mediano"]
-    preco_desc = (valor_estimado * (1 - config.DESCONTO_TIPICO_PADRAO)) if valor_estimado else None
+    estimado_confiavel = valor_estimado and valor_estimado >= config.VALOR_PISO_CONFIAVEL
+    preco_desc = (valor_estimado * (1 - config.DESCONTO_TIPICO_PADRAO)) if estimado_confiavel else None
 
     candidatos = [p for p in (preco_hist, preco_desc) if p]
     preco_alvo = min(candidatos) if candidatos else None  # conservador: o menor
@@ -159,10 +182,14 @@ def estimar_viabilidade(edital, stats, impedidos=None):
         explicacao.append(
             "Preço-alvo por histórico: mediana de R$ {:,.2f} em {} contrato(s) similar(es) do órgão.".format(
                 preco_hist, stats["n_contratos"]))
-    else:
+    elif estimado_confiavel:
         explicacao.append(
             "Sem histórico de valores similares no órgão — preço-alvo cai no desconto típico ({}%).".format(
                 int(config.DESCONTO_TIPICO_PADRAO * 100)))
+    else:
+        explicacao.append(
+            "Sem histórico no órgão e valor estimado simbólico/sigiloso — "
+            "não dá para cravar um preço-alvo. Confira o valor no edital.")
     if preco_desc:
         explicacao.append(
             "Preço-alvo por desconto típico sobre o estimado: R$ {:,.2f}.".format(preco_desc))
