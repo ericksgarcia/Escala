@@ -255,6 +255,51 @@ def salvar_csv(linhas, caminho):
     print("CSV salvo em: {}".format(caminho))
 
 
+def _dia_mes(data_iso):
+    """'2026-06-16T08:00:00' -> '16/06'. Vazio se inválida."""
+    try:
+        d = datetime.fromisoformat((data_iso or "").split("T")[0])
+        return d.strftime("%d/%m")
+    except ValueError:
+        return ""
+
+
+def imprimir_resumo(linhas, top=30):
+    """
+    Resumo enxuto: o que estão comprando + valor + encerramento, em tabela
+    compacta, mais o PREÇO MÉDIO/MEDIANO dos editais abertos (ignorando valores
+    simbólicos/sigilosos abaixo do piso confiável).
+    """
+    reais = [l["valor_estimado"] for l in linhas
+             if l["valor_estimado"] and l["valor_estimado"] >= config.VALOR_PISO_CONFIAVEL]
+    n_simbolicos = len(linhas) - len(reais)
+
+    print("\n" + "=" * 78)
+    print("RESUMO — {} editais abertos em {} (objeto + teto R$ {:,.0f})".format(
+        len(linhas), config.UF, config.VALOR_MAXIMO))
+    if reais:
+        media = sum(reais) / len(reais)
+        mediana = sorted(reais)[len(reais) // 2]
+        print("Preço médio estimado: R$ {:,.2f}  |  mediana: R$ {:,.2f}  "
+              "(sobre {} editais com valor informado)".format(media, mediana, len(reais)))
+    if n_simbolicos:
+        print("({} editais com valor simbólico/sigiloso ficaram fora da média)".format(n_simbolicos))
+    print("=" * 78)
+    print("{:<18} {:<52} {:>11}  {}".format("LOCAL", "O QUE ESTÃO COMPRANDO", "VALOR", "ENCERRA"))
+    print("-" * 90)
+    for l in linhas[:top]:
+        local = "{}/{}".format(l["municipio"], l["uf"])[:18]
+        objeto = " ".join((l["objeto"] or "").split())[:52]
+        if l["valor_estimado"] and l["valor_estimado"] >= config.VALOR_PISO_CONFIAVEL:
+            valor = "R$ {:,.0f}".format(l["valor_estimado"])
+        else:
+            valor = "(sigiloso)"
+        print("{:<18} {:<52} {:>11}  {}".format(
+            local, objeto, valor, _dia_mes(l["encerramento"])))
+    if len(linhas) > top:
+        print("... +{} editais no CSV ({}).".format(len(linhas) - top, config.CSV_RADAR))
+
+
 def imprimir_ranking(linhas, top=15):
     """Mostra os primeiros editais ranqueados de forma legível."""
     print("\n" + "=" * 70)
@@ -302,7 +347,10 @@ def main(argv):
         return
 
     print("\n{} editais passaram nos filtros (objeto + teto).".format(len(linhas)))
-    imprimir_ranking(linhas, top=top)
+    if "--resumo" in argv:
+        imprimir_resumo(linhas, top=top if "--top" in argv else 30)
+    else:
+        imprimir_ranking(linhas, top=top)
     salvar_csv(linhas, config.CSV_RADAR)
 
 

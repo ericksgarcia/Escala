@@ -65,6 +65,7 @@ cd pncp_garimpo
 
 # 1) Radar — lista e ranqueia editais abertos
 python3 radar.py                 # roda e salva saida_radar.csv
+python3 radar.py --resumo        # tabela enxuta: o que compram + valor + preço médio
 python3 radar.py --top 30        # mostra 30 no terminal
 python3 radar.py --debug         # imprime o JSON real do 1º item (introspecção)
 
