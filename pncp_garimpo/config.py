@@ -40,7 +40,7 @@ UF = "MG"
 
 # Valor máximo de contrato que consigo executar (R$). Editais acima disso são
 # descartados no radar (ou pontuados negativamente, conforme configuração).
-VALOR_MAXIMO = 10000.0
+VALOR_MAXIMO = 50000.0
 
 # Prazo mínimo (em dias) que preciso para preparar uma proposta. Editais que
 # encerram antes disso perdem pontos (ou são descartados, ver DESCARTAR_*).
