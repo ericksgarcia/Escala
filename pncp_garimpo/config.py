@@ -99,6 +99,22 @@ DESCONTO_TIPICO_PADRAO = 0.15  # 15%
 VIABILIDADE_MAX_PAGINAS = 100
 
 # ---------------------------------------------------------------------------
+# Histórico "edital pediu X / vencedor foi Y" (historico.py)
+# ---------------------------------------------------------------------------
+
+# Quantos resultados (itens já homologados) coletar para o histórico.
+HISTORICO_ALVO = 30
+
+# Janela do passado a varrer (dias atrás). Editais publicados há mais tempo têm
+# maior chance de já estarem homologados (com resultado/vencedor).
+HISTORICO_DIA_INICIO = 200   # começa a olhar a partir de X dias atrás
+HISTORICO_DIA_FIM = 45       # até X dias atrás (recentes demais ainda não têm resultado)
+
+# Se True, filtra o histórico pelas suas PALAVRAS_CHAVE (seu nicho). Se False,
+# pega qualquer objeto. Pode sobrescrever com --todas na linha de comando.
+HISTORICO_SO_MEU_NICHO = True
+
+# ---------------------------------------------------------------------------
 # CEIS/CNEP (opcional) — empresas impedidas/punidas
 # ---------------------------------------------------------------------------
 # A consulta CEIS/CNEP via Portal da Transparência exige uma chave de API

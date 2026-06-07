@@ -78,7 +78,12 @@ python3 radar.py --debug         # imprime o JSON real do 1º item (introspecç�
 python3 itens.py                 # detalha os 10 melhores → saida_itens.csv
 python3 itens.py --top 20        # detalha os 20 melhores
 
-# 3) Viabilidade — analisa os melhores do radar
+# 3) Histórico — "o edital pedia X, o vencedor fechou Y"
+python3 historico.py             # ~30 itens já homologados do seu nicho (MG)
+python3 historico.py --todas     # qualquer objeto (não só o seu nicho)
+python3 historico.py --n 50      # alvo de 50 resultados
+
+# 4) Viabilidade — analisa os melhores do radar
 python3 viabilidade.py           # usa saida_radar.csv (top 5)
 python3 viabilidade.py --top 8   # analisa os 8 melhores
 python3 viabilidade.py --debug   # imprime o JSON real de um contrato

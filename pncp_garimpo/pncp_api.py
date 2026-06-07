@@ -167,6 +167,38 @@ def paginar(endpoint, params=None, max_paginas=None, verbose=False):
         pagina += 1
 
 
+def buscar_resultados_item(numero_controle, num_item):
+    """
+    Busca os RESULTADOS de um item (quem venceu e por quanto).
+
+    Endpoint pncp:
+      /api/pncp/v1/orgaos/{cnpj}/compras/{ano}/{seq}/itens/{num}/resultados
+    Campos úteis: valorUnitarioHomologado, valorTotalHomologado,
+    quantidadeHomologada, nomeRazaoSocialFornecedor, niFornecedor,
+    porteFornecedorNome. Devolve [] em qualquer erro.
+
+    OBS: o campo 'percentualDesconto' da API é inconfiável — calcule o desconto
+    a partir de (estimado - homologado) / estimado.
+    """
+    if not numero_controle:
+        return []
+    try:
+        esquerda, ano = numero_controle.split("/")
+        cnpj, _tipo, sequencial = esquerda.split("-")
+        seq = int(sequencial)
+    except (ValueError, TypeError):
+        return []
+    url = "{}/v1/orgaos/{}/compras/{}/{}/itens/{}/resultados".format(
+        config.BASE_PNCP.rstrip("/"), cnpj, ano, seq, num_item)
+    try:
+        dados = _buscar_url(url)
+    except (ErroRede, ValueError):
+        return []
+    if isinstance(dados, dict):
+        dados = dados.get("data") or []
+    return dados if isinstance(dados, list) else []
+
+
 def corrigir_texto(s):
     """
     Corrige "mojibake" (texto UTF-8 que foi gravado como latin-1) presente em
