@@ -37,9 +37,9 @@ def _norm(s):
 
 # Pistas de que a entrega é parcelada (registro de preços) -> frete recorrente.
 _PISTAS_SRP = [_norm(x) for x in (
-    "registro de preco", "registro de precos", "futura e eventual",
-    "eventual aquisicao", "eventual contratacao", "parcelada", "sob demanda",
-    "fornecimento continuo", "fornecimento contínuo")]
+    "registro de preco", "registro de precos", "eventual", "parcelada",
+    "sob demanda", "fornecimento continuo", "fornecimento contínuo",
+    "futura e eventual", "futuro e eventual")]
 
 
 def carregar_custos():
