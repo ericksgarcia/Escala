@@ -1,0 +1,9 @@
+# Artefatos gerados em runtime
+__pycache__/
+*.pyc
+
+# Saídas geradas pelos scripts (regeradas a cada execução)
+saida_*.csv
+
+# Seus custos reais de compra (pessoal — não versionar). Use custos.exemplo.csv como modelo.
+custos.csv
