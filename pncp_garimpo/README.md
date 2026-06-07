@@ -83,6 +83,12 @@ python3 historico.py             # ~30 itens já homologados do seu nicho (MG)
 python3 historico.py --todas     # qualquer objeto (não só o seu nicho)
 python3 historico.py --n 50      # alvo de 50 resultados
 
+# 3b) Margem líquida — reordena por LUCRO REAL (desconta imposto + frete)
+python3 margem.py                # modo triagem (custo = % do estimado)
+python3 margem.py --top 25       # os 25 mais lucrativos
+#   modo preciso: crie custos.csv (trecho_descricao,custo_unitario) com seu custo real
+#   veja o modelo em custos.exemplo.csv
+
 # 4) Viabilidade — analisa os melhores do radar
 python3 viabilidade.py           # usa saida_radar.csv (top 5)
 python3 viabilidade.py --top 8   # analisa os 8 melhores

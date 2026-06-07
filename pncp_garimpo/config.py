@@ -99,6 +99,44 @@ DESCONTO_TIPICO_PADRAO = 0.15  # 15%
 VIABILIDADE_MAX_PAGINAS = 100
 
 # ---------------------------------------------------------------------------
+# Margem líquida com frete (margem.py)
+# ---------------------------------------------------------------------------
+
+# Sua base de operação (de onde saem as entregas).
+BASE_CIDADE = "Belo Horizonte"
+BASE_UF = "MG"
+
+# Imposto sobre a venda (%). Ajuste ao seu regime (Simples Nacional costuma
+# ficar entre 6% e 15% dependendo do anexo/faturamento).
+IMPOSTO_PCT = 0.10
+
+# Desconto típico do vencedor sobre o valor estimado (mediana do histórico ~21%).
+# Usado como "preço que você provavelmente precisaria praticar para ganhar".
+DESCONTO_DISPUTA_PCT = 0.21
+
+# MODO TRIAGEM: quando você NÃO informa o custo real do item, assumimos que o
+# seu custo de compra é esta fração do valor estimado do edital. Ajuste ao seu
+# poder de compra (0.55 = você compra a ~55% do preço de referência).
+CUSTO_PCT_DO_ESTIMADO = 0.55
+
+# Frete por entrega (R$). Piso típico de transportadora fracionada saindo de BH
+# para o interior. A parcelada (SRP) multiplica isto pelo nº de entregas.
+FRETE_POR_ENTREGA = 120.0
+
+# Nº de entregas presumido em registro de preços (parcelada). Entrega única = 1.
+ENTREGAS_SRP = 6
+
+# Teto de "frete como % do valor": acima disso o edital é marcado como inviável
+# por logística (frete come a margem).
+FRETE_PCT_MAXIMO = 0.15
+
+# Arquivo opcional com custos reais (MODO PRECISO). Formato CSV:
+#   trecho_descricao,custo_unitario
+# Ex.:  manta microfibra,30.00
+# O primeiro trecho que casar (sem acento, minúsculo) com a descrição é usado.
+ARQUIVO_CUSTOS = "custos.csv"
+
+# ---------------------------------------------------------------------------
 # Histórico "edital pediu X / vencedor foi Y" (historico.py)
 # ---------------------------------------------------------------------------
 
