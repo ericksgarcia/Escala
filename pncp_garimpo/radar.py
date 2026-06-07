@@ -175,23 +175,26 @@ def pontuar(edital):
 # Coleta
 # ---------------------------------------------------------------------------
 
-def coletar_editais_abertos(debug=False):
+def coletar_editais_abertos(debug=False, uf=None):
     """
-    Varre todas as modalidades configuradas no endpoint de proposta aberta,
-    filtrando por UF, e devolve a lista bruta de editais (sem filtro de objeto).
+    Varre todas as modalidades configuradas no endpoint de proposta aberta e
+    devolve a lista bruta de editais (sem filtro de objeto).
+
+    uf: sigla do estado para filtrar. None = Brasil inteiro (útil para proposta
+    fechada, em que não há comparecimento e a localização só afeta o frete).
     """
     data_final = (date.today() + timedelta(days=config.JANELA_DIAS)).strftime("%Y%m%d")
     todos = []
     ja_introspeccionado = False
 
-    print("Coletando editais com proposta aberta — UF={}, janela até {}...".format(
-        config.UF, data_final))
+    print("Coletando editais com proposta aberta — região={}, janela até {}...".format(
+        uf or "BRASIL", data_final))
 
     for cod in config.MODALIDADES:
         params = {
             "dataFinal": data_final,
             "codigoModalidadeContratacao": cod,
-            "uf": config.UF,
+            "uf": uf,  # None é descartado pelo cliente -> busca nacional
         }
         antes = len(todos)
         for item in api.paginar("/v1/contratacoes/proposta", params,
@@ -279,7 +282,7 @@ def _dia_mes(data_iso):
         return ""
 
 
-def imprimir_resumo(linhas, top=30):
+def imprimir_resumo(linhas, top=30, regiao=None):
     """
     Resumo enxuto: o que estão comprando + valor + encerramento, em tabela
     compacta, mais o PREÇO MÉDIO/MEDIANO dos editais abertos (ignorando valores
@@ -291,7 +294,7 @@ def imprimir_resumo(linhas, top=30):
 
     print("\n" + "=" * 78)
     print("RESUMO — {} editais abertos em {} (objeto + teto R$ {:,.0f})".format(
-        len(linhas), config.UF, config.VALOR_MAXIMO))
+        len(linhas), regiao or config.UF, config.VALOR_MAXIMO))
     if reais:
         media = sum(reais) / len(reais)
         mediana = sorted(reais)[len(reais) // 2]
@@ -357,7 +360,13 @@ def main(argv):
     if so_fechada:
         print("Filtro: SÓ proposta fechada / sem lance ao vivo (você envia um valor antes).\n")
 
-    editais = coletar_editais_abertos(debug=debug)
+    # --brasil busca em todo o país (faz sentido com proposta fechada: sem
+    # comparecimento, a localização só afeta o frete). Senão, usa a sua UF.
+    uf = None if "--brasil" in argv else config.UF
+    if uf is None:
+        print("Abrangência: BRASIL inteiro (localização só pesa no frete).\n")
+
+    editais = coletar_editais_abertos(debug=debug, uf=uf)
     linhas = filtrar_e_pontuar(editais, so_fechada=so_fechada)
 
     if not linhas:
@@ -367,7 +376,7 @@ def main(argv):
 
     print("\n{} editais passaram nos filtros (objeto + teto).".format(len(linhas)))
     if "--resumo" in argv:
-        imprimir_resumo(linhas, top=top if "--top" in argv else 30)
+        imprimir_resumo(linhas, top=top if "--top" in argv else 30, regiao=uf or "BRASIL")
     else:
         imprimir_ranking(linhas, top=top)
     salvar_csv(linhas, config.CSV_RADAR)
