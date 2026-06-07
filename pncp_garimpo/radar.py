@@ -140,6 +140,12 @@ def pontuar(edital):
         score += 1
         sinais.append("Dispensa: disputa costuma ser menor")
 
+    # --- Modo de disputa (proposta fechada = sem lance ao vivo) ---
+    if api.pegar(edital, "modoDisputaId") in config.MODOS_DISPUTA_SEM_LANCE:
+        score += 1
+        sinais.append("Proposta fechada/sem lance ao vivo ({})".format(
+            api.pegar(edital, "modoDisputaNome", "")))
+
     # --- Prazo ---
     if dias is not None:
         if dias >= config.PRAZO_MINIMO_DIAS:
@@ -203,13 +209,21 @@ def coletar_editais_abertos(debug=False):
     return todos
 
 
-def filtrar_e_pontuar(editais):
-    """Aplica filtro de palavra-chave + teto e devolve linhas pontuadas e ordenadas."""
+def filtrar_e_pontuar(editais, so_fechada=False):
+    """
+    Aplica filtro de palavra-chave + teto e devolve linhas pontuadas e ordenadas.
+
+    so_fechada=True mantém apenas editais SEM lance ao vivo (proposta fechada /
+    credenciamento), conforme config.MODOS_DISPUTA_SEM_LANCE.
+    """
     linhas = []
     for ed in editais:
         objeto = api.corrigir_texto(api.pegar(ed, "objetoCompra", ""))
         palavras = _casa_palavra_chave(objeto)
         if not palavras:
+            continue
+
+        if so_fechada and api.pegar(ed, "modoDisputaId") not in config.MODOS_DISPUTA_SEM_LANCE:
             continue
 
         valor = api.pegar(ed, "valorTotalEstimado") or 0.0
@@ -230,6 +244,7 @@ def filtrar_e_pontuar(editais):
             "objeto": objeto,
             "valor_estimado": valor,
             "modalidade": api.pegar(ed, "modalidadeNome", ""),
+            "modo_disputa": api.pegar(ed, "modoDisputaNome", ""),
             "encerramento": api.pegar(ed, "dataEncerramentoProposta", ""),
             "dias_para_encerrar": dias if dias is not None else "",
             "palavras_casadas": "; ".join(palavras),
@@ -245,8 +260,8 @@ def filtrar_e_pontuar(editais):
 def salvar_csv(linhas, caminho):
     """Salva o ranking em CSV (UTF-8 com BOM para abrir bem no Excel)."""
     campos = ["score", "orgao", "municipio", "uf", "objeto", "valor_estimado",
-              "modalidade", "encerramento", "dias_para_encerrar", "palavras_casadas",
-              "sinais", "cnpj_orgao", "numero_controle", "link_edital"]
+              "modalidade", "modo_disputa", "encerramento", "dias_para_encerrar",
+              "palavras_casadas", "sinais", "cnpj_orgao", "numero_controle", "link_edital"]
     with open(caminho, "w", newline="", encoding="utf-8-sig") as f:
         w = csv.DictWriter(f, fieldnames=campos)
         w.writeheader()
@@ -338,12 +353,16 @@ def main(argv):
     print("disputa e mais margem para um fornecedor pequeno. NÃO são probabilidade")
     print("de vitória. Exigências de habilitação moram no PDF do edital.\n")
 
+    so_fechada = config.SO_PROPOSTA_FECHADA or "--fechado" in argv
+    if so_fechada:
+        print("Filtro: SÓ proposta fechada / sem lance ao vivo (você envia um valor antes).\n")
+
     editais = coletar_editais_abertos(debug=debug)
-    linhas = filtrar_e_pontuar(editais)
+    linhas = filtrar_e_pontuar(editais, so_fechada=so_fechada)
 
     if not linhas:
-        print("\nNenhum edital casou com as palavras-chave + teto. Ajuste config.py "
-              "(PALAVRAS_CHAVE, VALOR_MAXIMO, JANELA_DIAS).")
+        print("\nNenhum edital casou com os filtros. Ajuste config.py "
+              "(PALAVRAS_CHAVE, VALOR_MAXIMO, JANELA_DIAS) ou tire --fechado.")
         return
 
     print("\n{} editais passaram nos filtros (objeto + teto).".format(len(linhas)))

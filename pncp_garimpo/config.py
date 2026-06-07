@@ -72,6 +72,16 @@ MODALIDADES = [6, 8, 4, 12, 1, 13, 7, 5, 3, 9, 10]
 # Modalidades consideradas "ágeis" (menos burocracia, ciclo curto) -> ganham ponto.
 MODALIDADES_AGEIS = {6, 8}  # Pregão Eletrônico, Dispensa
 
+# Modos de disputa SEM lances ao vivo — você envia UMA proposta antes e pronto:
+#   2 = Fechado (proposta lacrada, abre tudo junto, menor preço ganha)
+#   5 = Não se aplica (credenciamento/sem disputa de preço)
+# Os modos 1 (Aberto), 3 (Aberto-Fechado) e 4 (Dispensa com disputa) têm lance ao vivo.
+MODOS_DISPUTA_SEM_LANCE = {2, 5}
+
+# Se True (ou --fechado na linha de comando), o radar mostra SÓ editais de
+# proposta fechada/sem lance ao vivo.
+SO_PROPOSTA_FECHADA = False
+
 # Se True, descarta de vez editais acima do teto de valor. Se False, mantém no
 # CSV mas com pontuação reduzida (útil para enxergar o mercado todo).
 DESCARTAR_ACIMA_DO_TETO = True
