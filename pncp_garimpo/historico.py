@@ -56,6 +56,17 @@ def _casa_nicho(objeto):
     return any(k and k in obj for k in _KW)
 
 
+# Pistas de entrega parcelada (registro de preços) — para o filtro de entrega única.
+_PISTAS_SRP = [_normalizar(x) for x in (
+    "registro de preco", "registro de precos", "eventual", "parcelada",
+    "sob demanda", "fornecimento continuo", "futura e eventual", "futuro e eventual")]
+
+
+def eh_srp(objeto):
+    o = _normalizar(objeto)
+    return any(p in o for p in _PISTAS_SRP)
+
+
 def _melhor_resultado(resultados):
     """Escolhe o resultado vencedor (1ª classificação SRP, senão o primeiro)."""
     if not resultados:
@@ -64,10 +75,13 @@ def _melhor_resultado(resultados):
     return (vencedores or resultados)[0]
 
 
-def coletar(alvo, so_nicho):
+def coletar(alvo, so_nicho, so_unica=False):
     """
     Varre contratações publicadas no passado (janela configurável), em MG, nas
     modalidades ágeis, e coleta itens homologados (estimado vs vencedor).
+
+    so_unica=True descarta entregas parceladas (registro de preços), mantendo
+    apenas compras de entrega única.
     """
     registros = []
     hoje = date.today()
@@ -79,6 +93,8 @@ def coletar(alvo, so_nicho):
         config.UF, inicio.isoformat(), fim.isoformat()))
     if so_nicho:
         print("Filtro: só o seu nicho ({} palavras-chave). Use --todas para abrir.".format(len(_KW)))
+    if so_unica:
+        print("Filtro: só ENTREGA ÚNICA (pula registro de preços/parcelada).")
 
     janela_ini = inicio
     while janela_ini < fim and len(registros) < alvo:
@@ -97,6 +113,8 @@ def coletar(alvo, so_nicho):
                     break
                 objeto = api.corrigir_texto(api.pegar(compra, "objetoCompra", ""))
                 if so_nicho and not _casa_nicho(objeto):
+                    continue
+                if so_unica and eh_srp(objeto):
                     continue
                 nc = api.pegar(compra, "numeroControlePNCP", "")
                 itens = api.buscar_itens_edital(nc)
@@ -201,6 +219,7 @@ def main(argv):
         except (ValueError, IndexError):
             pass
     so_nicho = config.HISTORICO_SO_MEU_NICHO and "--todas" not in argv
+    so_unica = "--unica" in argv
 
     ok, msg = api.testar_conectividade()
     print(msg)
@@ -210,7 +229,7 @@ def main(argv):
     print("\nLEMBRETE: histórico/estatística, NÃO garantia. Só itens já homologados;")
     print("orçamentos sigilosos ficam de fora (não há estimado para comparar).\n")
 
-    registros = coletar(alvo, so_nicho)
+    registros = coletar(alvo, so_nicho, so_unica)
     if not registros:
         print("\nNenhum resultado homologado encontrado nessa janela/nicho. "
               "Tente --todas ou ajuste HISTORICO_DIA_* em config.py.")

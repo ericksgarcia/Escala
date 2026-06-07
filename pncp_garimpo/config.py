@@ -145,7 +145,7 @@ HISTORICO_ALVO = 30
 
 # Janela do passado a varrer (dias atrás). Editais publicados há mais tempo têm
 # maior chance de já estarem homologados (com resultado/vencedor).
-HISTORICO_DIA_INICIO = 200   # começa a olhar a partir de X dias atrás
+HISTORICO_DIA_INICIO = 365   # começa a olhar a partir de X dias atrás
 HISTORICO_DIA_FIM = 45       # até X dias atrás (recentes demais ainda não têm resultado)
 
 # Se True, filtra o histórico pelas suas PALAVRAS_CHAVE (seu nicho). Se False,
